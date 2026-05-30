@@ -1,6 +1,14 @@
 #include <iostream>
 #include <cstring>
 #include <enet/enet.h>
+#include <networkPackets.h>
+
+void SendPlayerAction(
+    ENetPeer* peer,
+    uint32_t playerId,
+    ActionType actionType,
+    uint32_t cardId,
+    uint32_t targetId);
 
 int main()
 {
@@ -43,14 +51,13 @@ int main()
     {
         std::cout << "Connected to server.\n";
 
-        const char* msg = "Hello from client!";
-        ENetPacket* packet = enet_packet_create(
-            msg,
-            strlen(msg) + 1,
-            ENET_PACKET_FLAG_RELIABLE
+        SendPlayerAction(
+            peer,
+            1,
+            ActionType::PlayCard,
+            42,
+            0
         );
-
-        enet_peer_send(peer, 0, packet);
     }
     else
     {
@@ -88,4 +95,27 @@ int main()
 
     enet_host_destroy(client);
     enet_deinitialize();
+}
+
+void SendPlayerAction(
+    ENetPeer* peer,
+    uint32_t playerId,
+    ActionType actionType,
+    uint32_t cardId,
+    uint32_t targetId)
+{
+    PlayerActionPacket action;
+
+    action.playerId = playerId;
+    action.actionType = actionType;
+    action.cardInstanceId = cardId;
+    action.targetId = targetId;
+
+    ENetPacket* packet = enet_packet_create(
+        &action,
+        sizeof(PlayerActionPacket),
+        ENET_PACKET_FLAG_RELIABLE
+    );
+
+    enet_peer_send(peer, 0, packet);
 }

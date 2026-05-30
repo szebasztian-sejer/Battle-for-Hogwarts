@@ -54,7 +54,7 @@ if(PRODUCTION_BUILD)
 
 else()
 	# This is useful to get an ASSETS_PATH in your IDE during development
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/")
+	target_compile_definitions(client_test PUBLIC RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/")
 	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC PRODUCTION_BUILD=0) 
 
 endif()
@@ -85,19 +85,22 @@ elseif(APPLE OR UNIX) # macOS / Linux
 	endif()
 endif()
 
+target_include_directories("${CMAKE_PROJECT_NAME}"  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/ui")
+target_include_directories("${CMAKE_PROJECT_NAME}"  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/main")
+target_include_directories("${CMAKE_PROJECT_NAME}"  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/game")
+target_include_directories("${CMAKE_PROJECT_NAME}"  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include")
 
-target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/ui")
-target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/main")
-target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/game")
-target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include")
 
-target_include_directories(server_test PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include"
-)
+target_include_directories(server_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/ui")
+target_include_directories(server_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/main")
+target_include_directories(server_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/game")
+target_include_directories(server_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include")
 
-target_include_directories(client_test PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include"
-)
+target_include_directories(client_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/ui")
+target_include_directories(client_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/main")
+target_include_directories(client_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/game")
+target_include_directories(client_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include")
+
 
 target_link_libraries(server_test PRIVATE enet)
 target_link_libraries(client_test PRIVATE enet)
