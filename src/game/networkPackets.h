@@ -1,7 +1,4 @@
 #pragma once
-
-// NetworkPackets.h
-#pragma once
 #include <cstdint>
 
 enum class PacketType : uint8_t

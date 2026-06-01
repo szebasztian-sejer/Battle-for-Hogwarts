@@ -38,9 +38,6 @@ file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/
 
 add_executable("${CMAKE_PROJECT_NAME}")
 
-add_executable(server_test src/main/server.cpp)
-add_executable(client_test src/main/client.cpp)
-
 set_property(TARGET "${CMAKE_PROJECT_NAME}" PROPERTY CXX_STANDARD 17)
 
 
@@ -54,7 +51,7 @@ if(PRODUCTION_BUILD)
 
 else()
 	# This is useful to get an ASSETS_PATH in your IDE during development
-	target_compile_definitions(client_test PUBLIC RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/")
+	target_compile_definitions("${CMAKE_PROJECT_NAME}"  PUBLIC RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/")
 	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC PRODUCTION_BUILD=0) 
 
 endif()
@@ -91,30 +88,16 @@ target_include_directories("${CMAKE_PROJECT_NAME}"  PUBLIC "${CMAKE_CURRENT_SOUR
 target_include_directories("${CMAKE_PROJECT_NAME}"  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include")
 
 
-target_include_directories(server_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/ui")
-target_include_directories(server_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/main")
-target_include_directories(server_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/game")
-target_include_directories(server_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include")
 
-target_include_directories(client_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/ui")
-target_include_directories(client_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/main")
-target_include_directories(client_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/game")
-target_include_directories(client_test PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include")
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE enet raylib_static)
 
-
-target_link_libraries(server_test PRIVATE enet)
-target_link_libraries(client_test PRIVATE enet)
-
-if(ANDROID)
-	#target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE raylib)
-else()
-# Link raylib library statically, Here wou would add other libraries!
-#target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE raylib_static enet)
-endif()
 if(WIN32)
-	#target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE ws2_32 winmm)
-	target_link_libraries(server_test PRIVATE ws2_32 winmm)
-    target_link_libraries(client_test PRIVATE ws2_32 winmm)
+    target_compile_definitions("${CMAKE_PROJECT_NAME}" PRIVATE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+
+    target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE ws2_32 winmm)
 endif()
 
 
