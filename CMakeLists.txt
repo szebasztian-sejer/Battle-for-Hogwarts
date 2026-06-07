@@ -1,104 +1,157 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(CMAKE_CXX_STANDARD 17)
+project(hogwarts LANGUAGES CXX)
 
-#! ! ! ! ! ! !
-#set this to ON instead of OFF to ship the game!
-#basically this will change the RESOURCES_PATH to be the local path
-#! ! ! ! ! ! !
-#delete the out folder after changing if visual studio doesn recognize the change
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(PRODUCTION_BUILD OFF CACHE BOOL "Make this a production build" FORCE)
 
-if(MSVC) 
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-add_compile_options(/arch:AVX2) #make sure SIMD optimizations take place
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>$<$<CONFIG:Release>:Release>")
+    add_compile_options(/arch:AVX2)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i.86")
-	add_compile_options(-mavx2 -mfma) # make sure SIMD optimizations take place, but on linux and other platforms
+    add_compile_options(-mavx2 -mfma)
 endif()
 
+# --------------------
+# Third-party libraries
+# --------------------
 
-project(hogwarts)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
 
-if(ANDROID)
-	find_package(raylib REQUIRED)
-else()
-	# Ensure raylib is built as static libraries
-	set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Raylib as static libraries" FORCE)
-#add raylib, and here you would add other libraries if needed!
-	add_subdirectory(thirdparty/raylib-5.0)
-endif()
-
+add_subdirectory(thirdparty/raylib-5.0)
 add_subdirectory(thirdparty/enet-1.3.18)
 
-# MY_SOURCES is defined to be a list of all the source files for my game 
-# DON'T ADD THE SOURCES BY HAND, they are already added with this macro
-file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+# --------------------
+# Source groups
+# --------------------
 
+file(GLOB_RECURSE SHARED_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/shared/*.cpp"
+)
 
-add_executable("${CMAKE_PROJECT_NAME}")
+file(GLOB_RECURSE CLIENT_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/client/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/*.cpp"
+)
 
-set_property(TARGET "${CMAKE_PROJECT_NAME}" PROPERTY CXX_STANDARD 17)
+file(GLOB_RECURSE SERVER_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/server/*.cpp"
+)
 
+# --------------------
+# Shared code
+# --------------------
 
+add_library(hogwarts_shared STATIC
+    ${SHARED_SOURCES}
+)
+
+target_include_directories(hogwarts_shared PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/shared"
+)
+
+target_compile_definitions(hogwarts_shared PUBLIC
+    $<$<BOOL:${PRODUCTION_BUILD}>:PRODUCTION_BUILD=1>
+    $<$<NOT:$<BOOL:${PRODUCTION_BUILD}>>:PRODUCTION_BUILD=0>
+)
 
 if(PRODUCTION_BUILD)
-	# setup the ASSETS_PATH macro to be in the root folder of your exe
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC RESOURCES_PATH="./resources/") 
-
-	# remove the option to debug asserts.
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC PRODUCTION_BUILD=1) 
-
+    target_compile_definitions(hogwarts_shared PUBLIC
+        RESOURCES_PATH="./resources/"
+    )
 else()
-	# This is useful to get an ASSETS_PATH in your IDE during development
-	target_compile_definitions("${CMAKE_PROJECT_NAME}"  PUBLIC RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/")
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC PRODUCTION_BUILD=0) 
-
+    target_compile_definitions(hogwarts_shared PUBLIC
+        RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/"
+    )
 endif()
 
-target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES} )
+# --------------------
+# Client executable
+# --------------------
 
+add_executable(hogwarts_client
+    ${CLIENT_SOURCES}
+)
 
-if(MSVC) # If using the VS compiler...
+target_include_directories(hogwarts_client PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/client"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include"
+)
 
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC _CRT_SECURE_NO_WARNINGS)
+target_link_libraries(hogwarts_client PRIVATE
+    hogwarts_shared
+    raylib_static
+    enet
+)
 
-	if(PRODUCTION_BUILD)
-		#YOU CAN REMOVE THE CONSOLE WITH THIS LINE!
-		set_target_properties("${CMAKE_PROJECT_NAME}" PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup") #no console
-	endif()
+# --------------------
+# Server executable
+# --------------------
 
-elseif(MINGW) # Windows / MinGW GCC/Clang
-	if(PRODUCTION_BUILD)
-		# Remove console on Windows under MinGW
-		target_link_options("${CMAKE_PROJECT_NAME}" PRIVATE
-			-mwindows
-		)
-	endif()
+add_executable(hogwarts_server
+    ${SERVER_SOURCES}
+)
 
-elseif(APPLE OR UNIX) # macOS / Linux
-	if(PRODUCTION_BUILD)
-		target_link_options("${CMAKE_PROJECT_NAME}" PRIVATE -s)
-	endif()
-endif()
+target_include_directories(hogwarts_server PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/server"
+    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include"
+)
 
-target_include_directories("${CMAKE_PROJECT_NAME}"  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/ui")
-target_include_directories("${CMAKE_PROJECT_NAME}"  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/main")
-target_include_directories("${CMAKE_PROJECT_NAME}"  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src/game")
-target_include_directories("${CMAKE_PROJECT_NAME}"  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/enet-1.3.18/include")
+target_link_libraries(hogwarts_server PRIVATE
+    hogwarts_shared
+    enet
+)
 
-
-
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE enet raylib_static)
+# --------------------
+# Windows-specific setup
+# --------------------
 
 if(WIN32)
-    target_compile_definitions("${CMAKE_PROJECT_NAME}" PRIVATE
+
+    #need these flags in order to not conflict with raylib...
+    target_compile_definitions(hogwarts_client PRIVATE
         WIN32_LEAN_AND_MEAN
         NOMINMAX
+        NOGDI
+        NOUSER
+        _CRT_SECURE_NO_WARNINGS
     )
 
-    target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE ws2_32 winmm)
+    target_compile_definitions(hogwarts_server PRIVATE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+        _CRT_SECURE_NO_WARNINGS
+    )
+
+    target_link_libraries(hogwarts_client PRIVATE
+        ws2_32
+        winmm
+        opengl32
+        gdi32
+    )
+
+    target_link_libraries(hogwarts_server PRIVATE
+        ws2_32
+        winmm
+    )
 endif()
 
+# --------------------
+# Production options
+# --------------------
 
-
+if(PRODUCTION_BUILD)
+    if(MSVC)
+        set_target_properties(hogwarts_client PROPERTIES
+            LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup"
+        )
+    elseif(MINGW)
+        target_link_options(hogwarts_client PRIVATE -mwindows)
+    elseif(APPLE OR UNIX)
+        target_link_options(hogwarts_client PRIVATE -s)
+        target_link_options(hogwarts_server PRIVATE -s)
+    endif()
+endif()

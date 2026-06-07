@@ -12,7 +12,7 @@ void Widget::updateAndRenderSelf(bool visible)
 		int textX = drawRec.x + (drawRec.width - textWidth) / 2;
 		int textY = drawRec.y + (drawRec.height - FONT_SIZE) / 2;
 
-		DrawText(text.c_str(), textX, textY, FONT_SIZE, WHITE);
+		DrawText(text.c_str(), textX, textY, FONT_SIZE, BLACK);
 	};
 
 	switch (type)
