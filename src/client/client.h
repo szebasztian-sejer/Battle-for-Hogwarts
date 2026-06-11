@@ -3,7 +3,7 @@
 #include <string>
 #include <networkPackets.h>
 #include <gameState.h>
-#include <lobbyState.h>
+#include <lobby.h>
 
 
 struct _ENetHost;
@@ -32,7 +32,7 @@ public:
 
     ClientState clientState = ClientState::IN_MENU;
     GameState gameState = {};
-    LobbyState lobbyState = {};
+    Lobby::LobbyState lobbyState = {};
     uint32_t playerID = 0;
     Widget mainMenu = {};
     Widget lobbyUI = {};
@@ -69,7 +69,7 @@ public:
     void close();
 
     void displayAndInteract();
-    void sendLobbyAction(uint32_t playerId, LobbyActionType lobbyAction, int schoolYear = -1, CharacterID charID = CharacterID::None);
+    void sendWaitingRoomAction(uint32_t playerId, WaitingRoomActionType waitingRoomAction, int schoolYear = -1, CharacterID charID = CharacterID::None);
     void changeSchoolYear(int year);
     void setCharacter(CharacterID charID);
 

@@ -4,7 +4,7 @@
 
 struct LobbyPlayer
 {
-    uint32_t playerId = 0;
+    uint32_t playerID = 0;
     bool ready = false;
     bool connected = false;
     bool isHost = false;
