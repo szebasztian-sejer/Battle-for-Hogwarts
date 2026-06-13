@@ -29,7 +29,7 @@ struct Lobby
     std::unordered_map<uint32_t, LobbyPlayer> players;
 
     bool allPlayersReady() const;
-    LobbyPlayer& getPlayer(uint32_t id) const;
+    LobbyPlayer& getPlayer(uint32_t id);
 
     bool addPlayer(const LobbyPlayer& lp);
 

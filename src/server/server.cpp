@@ -81,6 +81,7 @@ void Server::handleEvent(ENetEvent& enetEvent)
         }
         case ENET_EVENT_TYPE_DISCONNECT:
         {
+            std::cout << "Peer disconnected. data = " << enetEvent.data << "\n";
             handleDisconnect(enetEvent.peer);
         }
     }
@@ -112,24 +113,51 @@ void Server::handlePacket(ENetPeer* peer, ENetPacket* packet)
     {
         case PacketType::HostLobby:
         {
+            std::cout << "Received request to host lobby\n";
             auto host = createLobbyPlayer();
             host.isHost = true;
             assignPlayerID(peer, host.playerID);
             uint32_t id = createLobby();
             addServerPlayer(host.playerID, peer);
             lobbies.at(id).addPlayer(host);
+
+            InviteToLobbyPacket inviteToLobbyPacket;
+            inviteToLobbyPacket.lobbyID = id;
+            inviteToLobbyPacket.playerID = host.playerID;
+            inviteToLobbyPacket.isHost = true;
+
+            ENetPacket* invite = enet_packet_create(&inviteToLobbyPacket, sizeof(InviteToLobbyPacket), ENET_PACKET_FLAG_RELIABLE);
+
+            enet_peer_send(peer, 0, invite);
  
             broadcastLobbyState(id);
             break;
         }
         case PacketType::JoinLobby:
         {
-            auto player = createLobbyPlayer();
-            assignPlayerID(peer, player.playerID);
+            std::cout << "Received request to join lobby\n";
             JoinLobbyPacket joinLobbyPacket;
             std::memcpy(&joinLobbyPacket, packet->data, sizeof(JoinLobbyPacket));
-            lobbies.at(joinLobbyPacket.lobbyID).addPlayer(player);
 
+            auto player = createLobbyPlayer();
+            assignPlayerID(peer, player.playerID);
+
+            std::cout << "Adding server player\n";
+            addServerPlayer(player.playerID, peer);
+
+
+            lobbies.at(joinLobbyPacket.lobbyID).addPlayer(player);
+    
+
+            InviteToLobbyPacket inviteToLobbyPacket;
+            inviteToLobbyPacket.lobbyID = joinLobbyPacket.lobbyID;
+            inviteToLobbyPacket.playerID = player.playerID;
+
+            ENetPacket* invite = enet_packet_create(&inviteToLobbyPacket, sizeof(InviteToLobbyPacket), ENET_PACKET_FLAG_RELIABLE);
+
+            enet_peer_send(peer, 0, invite);
+            
+            std::cout << "Sent invitation to join lobby\n";
             broadcastLobbyState(joinLobbyPacket.lobbyID);
             break;
         }
@@ -153,15 +181,16 @@ void Server::handlePacket(ENetPeer* peer, ENetPacket* packet)
 
 void Server::broadcastLobbyState(uint32_t lobbyID)
 {
+    std::cout << "Attempting to broadcast lobby state\n";
     if (lobbies.find(lobbyID) == lobbies.end()) { return; }
 
     Lobby lobby = lobbies.at(lobbyID);
-    ENetPacket* packet = nullptr;
 
     if (lobby.lobbyState == Lobby::LobbyState::WaitingRoom)
     {
         WaitingRoomStatePacket waitingRoomPacket;
         waitingRoomPacket.schoolYear = lobby.schoolYear;
+        waitingRoomPacket.lobbyID = lobbyID;
 
         int i = 0;
         for (auto& [id, player] : lobby.players)
@@ -179,21 +208,39 @@ void Server::broadcastLobbyState(uint32_t lobbyID)
 
         waitingRoomPacket.playerCount = i;
 
-        packet = enet_packet_create(
-            &waitingRoomPacket,
-            sizeof(WaitingRoomStatePacket),
-            ENET_PACKET_FLAG_RELIABLE
-        );
+        for (auto& [id, player] : serverPlayers)
+        {
+            if (lobbies.at(lobbyID).players.find(id) != lobbies.at(lobbyID).players.end())
+            {
+                std::cout << "Creating packet...\n";
+                ENetPacket* packet = enet_packet_create(
+                    &waitingRoomPacket,
+                    sizeof(WaitingRoomStatePacket),
+                    ENET_PACKET_FLAG_RELIABLE
+                );
+                std::cout << "Sending lobby state\n";
+                enet_peer_send(player.peer, 0, packet);
+            }
+        }
+        
 
     }
-    if (!packet) { return; }
-    for (auto& [id, player] : serverPlayers)
+  
+    
+}
+
+uint32_t Server::createLobby()
+{
+    Lobby lobby;
+    uint32_t lobbyID = 0;
+    while (lobbies.find(lobbyID) != lobbies.end())
     {
-        if (lobbies.at(lobbyID).players.find(id) != lobbies.at(lobbyID).players.end())
-        {
-            enet_peer_send(player.peer, 0, packet);
-        }
+        lobbyID = getRandomInt(0, 255);
     }
+    lobby.lobbyId = lobbyID;
+    lobby.lobbyState = Lobby::LobbyState::WaitingRoom;
+    lobbies[lobbyID] = lobby;
+    return lobbyID;
 }
 
 bool Server::update()

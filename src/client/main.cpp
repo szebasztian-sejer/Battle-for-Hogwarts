@@ -1,6 +1,8 @@
 #include <raylib.h>
 #include <client.h>
 #include <iostream>
+#include <chrono>
+#include <thread>
 
 int main()
 {
@@ -23,6 +25,8 @@ int main()
 		client.updateUI();
 
 		EndDrawing();
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
 	CloseWindow();

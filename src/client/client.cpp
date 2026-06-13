@@ -74,24 +74,19 @@ bool Client::updateNetwork()
     {
         switch (clientState)
         {
-        case ClientState::IN_MENU:
+        case ClientState::Menu:
         {
             handleMenuEvent(enetEvent);
             break;
         }
 
-        case ClientState::IN_LOBBY:
+        case ClientState::WaitingRoom:
         {
-            handleLobbyEvent(enetEvent);
-            auto it = lobbyState.players.find(playerID);
-            if (it != lobbyState.players.end())
-            {
-                isHost = it->second.isHost;
-            }
+            handleWaitingRoomEvent(enetEvent);
             break;
         }
 
-        case ClientState::IN_GAME:
+        case ClientState::InGame:
         {
             handleGameEvent(enetEvent);
             break;
@@ -102,53 +97,13 @@ bool Client::updateNetwork()
         }
     }
 
-    return clientState != ClientState::CLOSING;
+    return clientState != ClientState::Closing;
 }
 
 void Client::updateUI()
 {
     displayAndInteract();
 }
-
-#if 0
-bool Client::update()
-{
-    
-    ENetEvent enetEvent = {};
-    while (enet_host_service(client, &enetEvent, 0) > 0)
-    {
-        switch (clientState)
-        {
-        case ClientState::IN_MENU:
-        {
-            handleMenuEvent(enetEvent);
-            break;
-        }
-        case ClientState::IN_LOBBY:
-        {
-            handleLobbyEvent(enetEvent);
-            auto it = lobbyState.players.find(playerID);
-            if (it != lobbyState.players.end())
-            {
-                isHost = it->second.isHost;
-            }
-            break;
-        }
-        case ClientState::IN_GAME:
-        {
-            handleGameEvent(enetEvent);
-            break;
-        }
-        default:
-            break;
-        }
-
-    }
-    displayAndInteract();
-
-    return true;
-}
-#endif
 
 void Client::handleMenuEvent(ENetEvent& enetEvent)
 {
@@ -163,14 +118,33 @@ void Client::handleMenuEvent(ENetEvent& enetEvent)
         {
             std::cout << "Sending lobby packet\n";
 
-            CreateLobbyPacket createLobbyPacket;
+            HostLobbyPacket hostLobbyPacket;
             ENetPacket* packet = enet_packet_create(
-                &createLobbyPacket,
-                sizeof(CreateLobbyPacket),
+                &hostLobbyPacket,
+                sizeof(HostLobbyPacket),
                 ENET_PACKET_FLAG_RELIABLE
             );
 
             enet_peer_send(peer, 0, packet);
+            enet_host_flush(client);
+        }
+        else
+        {
+            std::cout << "Creaing join request packet...\n";
+
+            JoinLobbyPacket joinLobbyPacket;
+            joinLobbyPacket.lobbyID = static_cast<uint32_t>(std::stoi(lobbyID));
+            std::cout << "Static cast succeeded\n";
+            ENetPacket* packet = enet_packet_create(
+                &joinLobbyPacket,
+                sizeof(JoinLobbyPacket),
+                ENET_PACKET_FLAG_RELIABLE
+            );
+
+            std::cout << "Sending join lobby request: " << lobbyID << "\n";
+
+            enet_peer_send(peer, 0, packet);
+            std::cout << "Join request sent\n";
             enet_host_flush(client);
         }
 
@@ -197,10 +171,14 @@ void Client::handleMenuPacket(ENetPeer* peer, ENetPacket* packet)
 
     switch (packetType)
     {
-    case PacketType::CreateLobby:
+    case PacketType::InviteToLobby:
     {
-        std::cout << "Changing into lobby\n";
-        clientState = ClientState::IN_LOBBY;
+        std::cout << "Received lobby invitation\n";
+        InviteToLobbyPacket invitationPacket;
+        std::memcpy(&invitationPacket, packet->data, sizeof(InviteToLobbyPacket));
+
+        player.isHost = invitationPacket.isHost;
+        clientState = ClientState::WaitingRoom;
         return;
     }
     case PacketType::AssignPlayerID:
@@ -208,8 +186,9 @@ void Client::handleMenuPacket(ENetPeer* peer, ENetPacket* packet)
         AssignPlayerIDPacket idpacket;
         std::memcpy(&idpacket, packet->data, sizeof(AssignPlayerIDPacket));
         playerID = idpacket.playerID;
+        player.playerID = idpacket.playerID;
 
-        std::cout << "Received player ID: "<<playerID<<"\n";
+        std::cout << "Received player ID: "<<player.playerID<<"\n";
         break;
     }
     default:
@@ -221,19 +200,22 @@ void Client::handleMenuPacket(ENetPeer* peer, ENetPacket* packet)
     
 }
 
-void Client::handleLobbyEvent(ENetEvent& enetEvent)
+void Client::handleWaitingRoomEvent(ENetEvent& enetEvent)
 {
     switch (enetEvent.type)
         {
         case ENET_EVENT_TYPE_RECEIVE:
         {
-            handleLobbyPacket(enetEvent.peer, enetEvent.packet);
+            handleWaitingRoomPacket(enetEvent.peer, enetEvent.packet);
             enet_packet_destroy(enetEvent.packet);
             break;
         }
         case ENET_EVENT_TYPE_DISCONNECT:
         {
-            clientState = ClientState::IN_MENU;
+   
+  
+            std::cout << "Disconnected. data = " << enetEvent.data << "\n";
+            clientState = ClientState::Menu;
             connectionStarted = false;
             connectedToServer = false;
             wantsToCreateLobby = false;
@@ -244,41 +226,46 @@ void Client::handleLobbyEvent(ENetEvent& enetEvent)
     }
 }
 
-void Client::handleLobbyPacket(ENetPeer* peer, ENetPacket* packet)
+void Client::handleWaitingRoomPacket(ENetPeer* peer, ENetPacket* packet)
 {
     PacketType packetType;
     std::memcpy(&packetType, packet->data, sizeof(PacketType));
 
     switch (packetType)
     {
-    case PacketType::LobbyAction:
+    case PacketType::GameStart:
     {
-        LobbyActionPacket action;
-        std::memcpy(&action, packet->data, sizeof(LobbyActionPacket));
-        if (action.actionType == LobbyActionType::StartGame)
-        {
-            clientState = ClientState::IN_GAME;
-            
-        }
+        clientState = ClientState::InGame;
         break;
     }
-    case PacketType::LobbyState:
+    case PacketType::WaitingRoomState:
     {
-        LobbyStatePacket statePacket;
-        std::memcpy(&statePacket, packet->data, sizeof(LobbyStatePacket));
+        std::cout << "Received waiting room state\n";
+        WaitingRoomStatePacket statePacket;
+        std::memcpy(&statePacket, packet->data, sizeof(WaitingRoomStatePacket));
 
-        lobbyState.schoolYear = statePacket.schoolYear;
-        lobbyState.players.clear();
+        lobby.lobbyId = statePacket.lobbyID;
+        std::cout << "setting lobby ID to: "<< lobby.lobbyId<<"\n";
+        lobby.schoolYear = statePacket.schoolYear;
+        lobby.players.clear();
 
         for (int i = 0; i < statePacket.playerCount; ++i)
         {
+            auto packetPlayer = statePacket.players[i];
             LobbyPlayer lp;
-            lp.playerId = statePacket.players[i].playerId;
-            lp.ready = statePacket.players[i].ready;
-            lp.isHost = statePacket.players[i].isHost;
-            lp.charID = statePacket.players[i].charID;
+            lp.playerID = packetPlayer.playerID;
+            lp.ready = packetPlayer.ready;
+            lp.isHost = packetPlayer.isHost;
+            lp.charID = packetPlayer.charID;
 
-            lobbyState.players[lp.playerId] = lp;
+            lobby.players[lp.playerID] = lp;
+
+            if (packetPlayer.playerID == player.playerID)
+            {
+                player.ready = packetPlayer.ready;
+                player.isHost = packetPlayer.isHost;
+                player.charID = packetPlayer.charID;
+            }
         }
 
         break;
@@ -289,21 +276,21 @@ void Client::handleLobbyPacket(ENetPeer* peer, ENetPacket* packet)
 
 }
 
-void Client::sendLobbyAction(
-    uint32_t playerId, 
-    LobbyActionType lobbyAction, 
+void Client::sendWaitingRoomAction(
+    WaitingRoomActionType waitingRoomAction, 
     int schoolYear, 
     CharacterID charID)
 {
-    LobbyActionPacket lobbyActionPacket;
-    lobbyActionPacket.actionType = lobbyAction;
-    lobbyActionPacket.playerId = playerId;
-    lobbyActionPacket.schoolYear = schoolYear;
-    lobbyActionPacket.charID = charID;
+    WaitingRoomActionPacket waitingRoomActionPacket;
+    waitingRoomActionPacket.lobbyID = lobby.lobbyId;
+    waitingRoomActionPacket.waitingRoomActionType = waitingRoomAction;
+    waitingRoomActionPacket.playerID = playerID;
+    waitingRoomActionPacket.newYear = schoolYear;
+    waitingRoomActionPacket.newCharID = charID;
 
     ENetPacket* packet = enet_packet_create(
-        &lobbyActionPacket,
-        sizeof(LobbyActionPacket),
+        &waitingRoomActionPacket,
+        sizeof(WaitingRoomActionPacket),
         ENET_PACKET_FLAG_RELIABLE
     );
 
@@ -328,7 +315,7 @@ void Client::displayAndInteract()
 {
     switch (clientState)
     {
-    case ClientState::IN_MENU:
+    case ClientState::Menu:
     {
         mainMenu.widgets.clear();
 
@@ -342,8 +329,10 @@ void Client::displayAndInteract()
             }
         }
 
+        mainMenu.addTitle("IP address:");
         mainMenu.addTextBox(ipAddress);
-
+        mainMenu.addTitle("Lobby ID:");
+        mainMenu.addTextBox(lobbyID);
         if (mainMenu.addButton("Connect"))
         {
             wantsToCreateLobby = false;
@@ -356,21 +345,28 @@ void Client::displayAndInteract()
 
         mainMenu.updateAndRenderWidgets();
 
-        if (mainMenu.widgets.size() > 1 &&
-            mainMenu.widgets[1].type == WidgetTypes::TextBox)
+        if (mainMenu.widgets.size() > 4)
         {
-            ipAddress = mainMenu.widgets[1].text;
+            if (mainMenu.widgets[2].type == WidgetTypes::TextBox)
+            {
+                ipAddress = mainMenu.widgets[2].text;
+            }
+
+            if (mainMenu.widgets[4].type == WidgetTypes::TextBox)
+            {
+                lobbyID = mainMenu.widgets[4].text;
+            }
         }
 
         mainMenu.lastFrameWidgets = mainMenu.widgets;
 
         break;
     }
-    case ClientState::IN_LOBBY:
+    case ClientState::WaitingRoom:
     {
         lobbyUI.widgets.clear();
-
-        if (isHost)
+        lobbyUI.addTitle("Lobby ID: " + std::to_string(lobby.lobbyId));
+        if (player.isHost)
         {
             if (lobbyUI.addButton("Year 1"))
             {
@@ -402,38 +398,13 @@ void Client::displayAndInteract()
             }
         }
 
-        schoolYear = "School year: " + std::to_string(lobbyState.schoolYear);
+        schoolYear = "School year: " + std::to_string(lobby.schoolYear);
         lobbyUI.addTitle(schoolYear);
 
         if (lobbyUI.addButton("Toggle Ready"))
         {
-            bool myReady = false;
-
-            auto it = lobbyState.players.find(playerID);
-            if (it != lobbyState.players.end())
-            {
-                myReady = it->second.ready;
-            }
-            if (myReady)
-            {
-                LobbyActionPacket unready;
-                unready.actionType = LobbyActionType::PlayerUnready;
-                unready.playerId = playerID;
-
-                ENetPacket* packet = enet_packet_create(&unready, sizeof(LobbyActionPacket), ENET_PACKET_FLAG_RELIABLE);
-                enet_peer_send(peer, 0, packet);
-                readyString = "Ready status: Not ready";
-            }
-            else
-            {
-                LobbyActionPacket ready;
-                ready.actionType = LobbyActionType::PlayerReady;
-                ready.playerId = playerID;
-
-                ENetPacket* packet = enet_packet_create(&ready, sizeof(LobbyActionPacket), ENET_PACKET_FLAG_RELIABLE);
-                enet_peer_send(peer, 0, packet);
-                readyString = "Ready status: Ready";
-            }
+            sendWaitingRoomAction(WaitingRoomActionType::ToggleReady);
+            readyString = player.ready ? "Ready status: Not ready" : "Ready status: Ready";
         }
 
         lobbyUI.addTitle("Select character");
@@ -458,24 +429,17 @@ void Client::displayAndInteract()
             setCharacter(CharacterID::Luna);
         }
 
-        auto it = lobbyState.players.find(playerID);
-        if (it != lobbyState.players.end())
-        {
-            character = getCharacterName(it->second.charID);
-        }
-
+        character = getCharacterName(player.charID);
+ 
         lobbyUI.addTitle("Selected: " + character);
 
         lobbyUI.addTitle(readyString);
 
-        if (isHost)
+        if (player.isHost)
         {
             if (lobbyUI.addButton("Start Game"))
             {
-                LobbyActionPacket startGame;
-                startGame.actionType = LobbyActionType::StartGame;
-                ENetPacket* packet = enet_packet_create(&startGame, sizeof(LobbyActionPacket), ENET_PACKET_FLAG_RELIABLE);
-                enet_peer_send(peer, 0, packet);
+                sendWaitingRoomAction(WaitingRoomActionType::StartGame);
             }
         }
 
@@ -498,12 +462,12 @@ void Client::changeSchoolYear(int year)
 {
     std::cout << "Attempting to change school year to " << year << "\n";
 
-    sendLobbyAction(playerID, LobbyActionType::SetSchoolYear, year);
+    sendWaitingRoomAction(WaitingRoomActionType::SetYear, year);
 }
 
 void Client::setCharacter(CharacterID charID)
 {
     std::cout << playerID << " changing character to: " << getCharacterName(charID)<< "\n";
-    sendLobbyAction(playerID, LobbyActionType::SelectCharacter, -1, charID);
+    sendWaitingRoomAction(WaitingRoomActionType::SetCharacter, -1, charID);
 }
 

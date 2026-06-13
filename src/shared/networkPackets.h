@@ -14,6 +14,7 @@ enum class PacketType : uint8_t
 	InviteToLobby,
 	WaitingRoomState,
 	WaitingRoomAction,
+	GameStart,
 	InGameState,
 	InGameAction,
 	PACKET_TYPE_COUNT,
@@ -41,6 +42,7 @@ struct InviteToLobbyPacket
 	PacketType packetType = PacketType::InviteToLobby;
 	uint32_t lobbyID = 0;
 	uint32_t playerID = 0;
+	bool isHost = false;
 };
 
 

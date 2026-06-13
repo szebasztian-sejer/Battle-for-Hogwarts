@@ -9,4 +9,10 @@ struct LobbyPlayer
     bool connected = false;
     bool isHost = false;
     CharacterID charID = CharacterID::None;
+
+    //cards = defaultCards;
+
+    int health = 10;
+    bool stunned = false;
+    int coins = 0;
 };

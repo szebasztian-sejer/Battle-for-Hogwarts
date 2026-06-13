@@ -1,4 +1,5 @@
 #include <lobby.h>
+#include <iostream>
 
 bool Lobby::allPlayersReady() const
 {
@@ -13,7 +14,7 @@ bool Lobby::allPlayersReady() const
     return true;
 }
 
-LobbyPlayer& Lobby::getPlayer(uint32_t id) const
+LobbyPlayer& Lobby::getPlayer(uint32_t id) 
 {
     return players.at(id);
 }

@@ -24,15 +24,18 @@ public:
 
     enum class ClientState
     {
-        IN_MENU,
-        IN_LOBBY,
-        IN_GAME,
-        CLOSING
+        None,
+        Menu,
+        WaitingRoom,
+        InGame,
+        Closing,
+        CLIENT_STATE_COUNT,
     };
 
-    ClientState clientState = ClientState::IN_MENU;
+    ClientState clientState = ClientState::Menu;
     GameState gameState = {};
-    Lobby::LobbyState lobbyState = {};
+    LobbyPlayer player = {};
+    Lobby lobby;
     uint32_t playerID = 0;
     Widget mainMenu = {};
     Widget lobbyUI = {};
@@ -42,6 +45,7 @@ public:
     bool wantsToCreateLobby = false;
 
     std::string ipAddress = "";
+    std::string lobbyID = "";
     std::string schoolYear = "";
     std::string readyString = "Not ready";
     std::string character = "None";
@@ -56,20 +60,20 @@ public:
     void updateUI();
 
     void handleMenuEvent(ENetEvent& enetEvent);
-    void handleLobbyEvent(ENetEvent& enetEvent);
+    void handleWaitingRoomEvent(ENetEvent& enetEvent);
     void handleGameEvent(ENetEvent& enetEvent);
 
     //void handleGameDisconnect(ENetPeer* peer);
     //void handleDisconnect(ENetPeer* peer);
 
     void handleMenuPacket(ENetPeer* peer, ENetPacket* packet);
-    void handleLobbyPacket(ENetPeer* peer, ENetPacket* packet);
+    void handleWaitingRoomPacket(ENetPeer* peer, ENetPacket* packet);
     void handleGamePacket(ENetPeer* peer, ENetPacket* packet);
 
     void close();
 
     void displayAndInteract();
-    void sendWaitingRoomAction(uint32_t playerId, WaitingRoomActionType waitingRoomAction, int schoolYear = -1, CharacterID charID = CharacterID::None);
+    void sendWaitingRoomAction(WaitingRoomActionType waitingRoomAction, int schoolYear = -1, CharacterID charID = CharacterID::None);
     void changeSchoolYear(int year);
     void setCharacter(CharacterID charID);
 
